@@ -7,7 +7,7 @@ Pre-alpha - highly subject to change.
 > “Wherever we find orderly, stable systems in Nature, we find that they are
 > hierarchically structured, for the simple reason that without such structuring
 > of complex systems into sub-assemblies, there could be no order and
-> stability-except the order of a dead universr filled with a uniformly distributed gas.”
+> stability-except the order of a dead universe filled with a uniformly distributed gas.”
 
 -- Arthur Koestler, The Ghost in the Machine
 
