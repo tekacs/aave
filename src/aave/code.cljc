@@ -5,17 +5,17 @@
             [malli.generator :as mg]))
 
 (defn overloaded?
-  "Returns whether the provided `body+params` list is overloaded in arities"
-  [body+params]
-  (not (vector? (first body+params))))
+  "Returns whether the provided `params+body` list is overloaded in arities"
+  [params+body]
+  (not (vector? (first params+body))))
 
 (defn map-body
-  "Maps over the `body` portion of a `body+params` list with `f`. Calls `f` with both the param
+  "Maps over the `body` portion of a `params+body` list with `f`. Calls `f` with both the param
   symbols and the body."
-  [f body+params]
-  (if (overloaded? body+params)
-    (map #(map-body f %) body+params)
-    (cons (first body+params) (f (first body+params) (rest body+params)))))
+  [f params+body]
+  (if (overloaded? params+body)
+    (map #(map-body f %) params+body)
+    (cons (first params+body) (f (first params+body) (rest params+body)))))
 
 (defn pure?
   "Naively iterates over symbols in the provided `form` looking for whether any
@@ -29,12 +29,29 @@
     (->> (flatten form)
          (filter symbol?)
          (keep #(re-matches #".*!$" (str %)))
-         (remove #{"persistent!"})
+         (remove #(re-matches #"aave.code/.*|persistent!" %))
          (empty?))))
 
 (def impure?
   "The complement of `pure?`."
   (complement pure?))
+
+(defn on-purity-fail!
+  "Called upon impurity failure by default"
+  [name]
+  #?(:cljs (js/console.log "purity detection is broken"))
+  12345
+  #_ (throw (ex-info "Function name implies purity, but it calls impure code" {:name name})))
+
+(defn on-instrument-fail!
+  "Called upon instrument failure by default"
+  [ex-data]
+  (throw (ex-info "Instrument failed" ex-data)))
+
+(defn on-outstrument-fail!
+  "Called upon outstrument failure by default"
+  [ex-data]
+  (throw (ex-info "Outstrument failed" ex-data)))
 
 (defn extract-arg
   "Utility function for extracting arguments from a list.
@@ -75,32 +92,33 @@
                                    :aave.core/ret-schema ret-schema
                                    :aave.core/ret-explainer ret-explainer)
                             (merge meta-map))
-        enforce-purity? (:aave.core/enforce-purity settings)
-        on-purity-fail  (:aave.core/on-purity-fail settings)
+        {:aave.core/keys [enforce-purity on-purity-fail on-instrument-fail on-outstrument-fail]} settings
         params+body     (cond->> params+body
-                          (:aave.core/generate-stubs settings)
-                          (map-body (fn [_ body]
-                                      (if (empty? body)
-                                        `((mg/generate ~ret-schema))
-                                        body)))
+                          #_ (:aave.core/generate-stubs settings)
+                          #_ (map-body (fn [_ body]
+                                         (if (empty? body)
+                                           `((mg/generate ~ret-schema))
+                                           body)))
+
                           (and (:aave.core/instrument settings) param-explainer)
                           (map-body (fn [param-syms body]
                                       `((when-some [failure# ((-> #'~name meta :aave.core/param-explainer) [~@param-syms])]
-                                          (~(:aave.core/on-instrument-fail settings) failure#))
+                                          (~on-instrument-fail failure#))
                                         (do ~@body))))
 
-                          (and (:aave.core/outstrument settings) ret-explainer)
-                          (map-body (fn [_ body]
-                                      `((let [result# (do ~@body)]
-                                          (if-some [failure# ((-> #'~name meta :aave.core/ret-explainer) result#)]
-                                            (~(:aave.core/on-outstrument-fail settings) failure#)
-                                            result#))))))
-        fn-def (concat (keep identity
-                             [def-sym
-                              name
-                              new-meta])
-                       params+body)]
-    `(cond
-       (and ~enforce-purity? ~(pure? name) ~(impure? params+body))
-       (~on-purity-fail)
-       :else ~fn-def)))
+                          #_ (and (:aave.core/outstrument settings) ret-explainer)
+                          #_ (map-body (fn [_ body]
+                                         `((let [result# (do ~@body)]
+                                             (if-some [failure# ((-> #'~name meta :aave.core/ret-explainer) result#)]
+                                               (~on-outstrument-fail failure#)
+                                               result#))))))
+        fn-def `(~def-sym ~name ~new-meta
+                  ~@params+body)]
+    fn-def
+    #_ `(cond
+          (and ~enforce-purity ~(pure? name)
+               ~(impure? params+body))
+          (~on-purity-fail '~name)
+
+          :else
+          ~fn-def)))

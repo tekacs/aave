@@ -38,7 +38,7 @@
 (defn merge-param-schemas
   "Merges a collection of param schemas into a single multi-dispatch schema"
   [schemas]
-  (into [:multi {:dispatch count}]
+  (into [:multi {:dispatch 'count}]
         (map (fn [x] [(dec (count x)) x]))
         schemas))
 

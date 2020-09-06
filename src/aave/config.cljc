@@ -8,9 +8,9 @@
    :aave.core/instrument                 true
    :aave.core/enforce-purity             true
    :aave.core/malli-opts                 {}
-   :aave.core/on-purity-fail             (fn [] (throw (ex-info "Function name implies purity, but it calls impure code" {})))
-   :aave.core/on-instrument-fail         #(throw (ex-info "Instrument failed" %))
-   :aave.core/on-outstrument-fail        #(throw (ex-info "Outstrument failed" %))})
+   :aave.core/on-purity-fail             'aave.code/on-purity-fail!
+   :aave.core/on-instrument-fail         'aave.code/on-instrument-fail!
+   :aave.core/on-outstrument-fail        'aave.code/on-outstrument-fail!})
 
 (def config
   "Configuration atom for aave"
