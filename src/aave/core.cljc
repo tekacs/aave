@@ -35,8 +35,12 @@
                    {:private true})]
     `(code/generate ~cfg)))
 
-(defmulti param-schema (fn [f-sym] f-sym))
-(defmulti return-schema (fn [f-sym] f-sym))
+(defmulti param-schema "For the function at `f-sym`, returns a schema for the tuple of its parameters."
+  (fn [f-sym] f-sym))
+(defmulti return-schema "For the function at `f-sym`, returns a schema for its return value."
+  (fn [f-sym] f-sym))
 
-(defmulti param-explainer (fn [f-sym] f-sym))
-(defmulti return-explainer (fn [f-sym] f-sym))
+(defmulti param-explainer "For the function at `f-sym`, returns an explainer function to validate the tuple of its parameters"
+  (fn [f-sym] f-sym))
+(defmulti return-explainer "For the function at `f-sym`, returns an explainer function to validate its return value"
+  (fn [f-sym] f-sym))
