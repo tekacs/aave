@@ -34,3 +34,9 @@
   (let [cfg (merge (syntax.gw/parse args)
                    {:private true})]
     `(code/generate ~cfg)))
+
+(defmulti param-schema (fn [f-sym] f-sym))
+(defmulti return-schema (fn [f-sym] f-sym))
+
+(defmulti param-explainer (fn [f-sym] f-sym))
+(defmulti return-explainer (fn [f-sym] f-sym))

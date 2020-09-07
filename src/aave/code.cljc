@@ -2,7 +2,8 @@
   "Namespace providing utilities to parse and generate code"
   (:require [aave.config :as config]
             [malli.core :as m]
-            [malli.generator :as mg]))
+            [malli.generator :as mg]
+            [malli.error :as me]))
 
 (defn overloaded?
   "Returns whether the provided `params+body` list is overloaded in arities"
@@ -28,8 +29,8 @@
                form)]
     (->> (flatten form)
          (filter symbol?)
-         (keep #(re-matches #".*!$" (str %)))
-         (remove #(re-matches #"aave.code/.*|persistent!" %))
+         (keep #(re-matches #".*!\??$" (str %)))
+         (remove #(re-matches #"aave.code/.*|persistent!|volatile!|vreset!|vswap!" %))
          (empty?))))
 
 (def impure?
@@ -38,20 +39,30 @@
 
 (defn on-purity-fail!
   "Called upon impurity failure by default"
-  [name]
-  #?(:cljs (js/console.log "purity detection is broken"))
-  12345
-  #_ (throw (ex-info "Function name implies purity, but it calls impure code" {:name name})))
+  [name_]
+  (throw (ex-info (str "Function name " name_ " implies purity, but it calls impure code") {:name name_})))
+
+(defn- extended-humanize [param-syms ex-data]
+  (let [param-count (count (:value ex-data))
+        humanize (me/humanize ex-data)
+        long-params (take param-count (concat humanize (repeat nil)))]
+    (zipmap param-syms long-params)))
 
 (defn on-instrument-fail!
   "Called upon instrument failure by default"
-  [ex-data]
-  (throw (ex-info "Instrument failed" ex-data)))
+  [name_ param-syms ex-data]
+  (throw
+    (ex-info
+      (str "The function " name_ " was passed invalid parameters: " (extended-humanize param-syms ex-data))
+      ex-data)))
 
 (defn on-outstrument-fail!
   "Called upon outstrument failure by default"
-  [ex-data]
-  (throw (ex-info "Outstrument failed" ex-data)))
+  [name_ ex-data]
+  (throw
+    (ex-info
+      (str "The function " name_ " returned an invalid value: " (me/humanize ex-data))
+      ex-data)))
 
 (defn extract-arg
   "Utility function for extracting arguments from a list.
@@ -74,51 +85,43 @@
 (defmacro generate
   "Generates code using the provided `generate-map`"
   {:arglists '([generate-map])}
-  [{:keys [name doc params+body private param-schema ret-schema meta-map]}]
-  (let [def-sym         (if private
-                          'defn-
-                          'defn)
+  [{name_ :name :keys [doc params+body private param-schema ret-schema meta-map]}]
+  (let [def-sym         (if private 'defn- 'defn)
+        name-sym        (symbol (str *ns*) (name name_))
         settings        (merge @config/config meta-map)
         malli-opts      (:aave.core/malli-opts meta-map)
-        param-explainer (when param-schema
-                          `(m/explainer ~param-schema ~malli-opts))
-        ret-explainer   (when ret-schema
-                          `(m/explainer ~ret-schema ~malli-opts))
-        new-meta        (-> (meta name)
-                            (assoc :doc doc
-                                   :aave.core/generated true
-                                   :aave.core/param-schema param-schema
-                                   :aave.core/param-explainer param-explainer
-                                   :aave.core/ret-schema ret-schema
-                                   :aave.core/ret-explainer ret-explainer)
+        new-meta        (-> (meta name_)
+                            (assoc :doc doc :aave.core/generated true)
                             (merge meta-map))
         {:aave.core/keys [enforce-purity on-purity-fail on-instrument-fail on-outstrument-fail]} settings
+        enforce-purity  (if-some [local-purity? (:aave.core/enforce-purity new-meta)] local-purity? enforce-purity)
         params+body     (cond->> params+body
-                          #_ (:aave.core/generate-stubs settings)
-                          #_ (map-body (fn [_ body]
-                                         (if (empty? body)
-                                           `((mg/generate ~ret-schema))
-                                           body)))
+                          (:aave.core/generate-stubs settings)
+                          (map-body (fn [_ body]
+                                      (if (empty? body)
+                                        `((mg/generate ~ret-schema))
+                                        body)))
 
-                          (and (:aave.core/instrument settings) param-explainer)
+                          (and (:aave.core/instrument settings) param-schema)
                           (map-body (fn [param-syms body]
-                                      `((when-some [failure# ((-> #'~name meta :aave.core/param-explainer) [~@param-syms])]
-                                          (~on-instrument-fail failure#))
+                                      `((when-some [failure# ((aave.core/param-explainer '~name-sym) [~@param-syms])]
+                                          (~on-instrument-fail '~name-sym '[~@param-syms] failure#))
                                         (do ~@body))))
 
-                          #_ (and (:aave.core/outstrument settings) ret-explainer)
-                          #_ (map-body (fn [_ body]
-                                         `((let [result# (do ~@body)]
-                                             (if-some [failure# ((-> #'~name meta :aave.core/ret-explainer) result#)]
-                                               (~on-outstrument-fail failure#)
-                                               result#))))))
-        fn-def `(~def-sym ~name ~new-meta
-                  ~@params+body)]
-    fn-def
-    #_ `(cond
-          (and ~enforce-purity ~(pure? name)
-               ~(impure? params+body))
-          (~on-purity-fail '~name)
-
-          :else
-          ~fn-def)))
+                          (and (:aave.core/outstrument settings) ret-schema)
+                          (map-body (fn [_ body]
+                                      `((let [result# (do ~@body)]
+                                          (if-some [failure# ((aave.core/return-explainer '~name-sym) result#)]
+                                            (~on-outstrument-fail '~name-sym failure#)
+                                            result#))))))]
+    `(do
+       (defmethod aave.core/param-schema '~name-sym [_#] ~param-schema)
+       (defmethod aave.core/return-schema '~name-sym [_#] ~ret-schema)
+       (defmethod aave.core/param-explainer '~name-sym [_#]
+         (m/explainer ~param-schema ~malli-opts))
+       (defmethod aave.core/return-explainer '~name-sym [_#]
+         (m/explainer ~ret-schema ~malli-opts))
+       (when (and ~enforce-purity ~(pure? name_) ~(impure? params+body))
+         (~on-purity-fail '~name-sym))
+       (~def-sym ~name_ ~new-meta
+         ~@params+body))))
