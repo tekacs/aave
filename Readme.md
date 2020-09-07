@@ -1,6 +1,13 @@
-# Aave
+# ~~Aave~~ friendly fork of Aave
 
-[malli](https://github.com/metosin/malli) powered code checking for Clojure.
+[malli](https://github.com/metosin/malli) powered code checking for Clojure(Script).
+
+## Fork, you say?
+
+- This fork adds ClojureScript support and various quality of life improvements, such as 'humanize'd errors.
+- I'll likely be continuing this over time and may diverge from upstream some more. :)
+
+# Original README
 
 Pre-alpha - highly subject to change.
 
