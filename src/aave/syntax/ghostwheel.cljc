@@ -1,5 +1,5 @@
 (ns aave.syntax.ghostwheel
-  "Namespace for parsing ghosthweel style syntax"
+  "Namespace for parsing ghostwheel style syntax"
   (:require [aave.code :as code]))
 
 (defn param-vector?
