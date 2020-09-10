@@ -121,7 +121,10 @@
          (m/explainer ~param-schema ~malli-opts))
        (defmethod aave.core/return-explainer '~name-sym [_#]
          (m/explainer ~ret-schema ~malli-opts))
-       (when (and ~enforce-purity ~(pure? name_) ~(impure? params+body))
+       (and
+         ~enforce-purity
+         ~(pure? name_)
+         ~(impure? params+body)
          (~on-purity-fail '~name-sym))
        (~def-sym ~name_ ~new-meta
          ~@params+body))))
