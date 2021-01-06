@@ -2,7 +2,7 @@
  :deps
  {metosin/malli
   {:git/url "https://github.com/metosin/malli"
-   :sha     "a5bd5806d25fadb2f0025361189a641f50988df9"}}
+   :sha     "8223df795d1c5c3383d305f2f77dbe30d9460e76"}}
  :aliases
  {:test
   {:extra-paths ["test"]
