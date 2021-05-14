@@ -1,8 +1,6 @@
 {:paths ["src"]
  :deps
- {metosin/malli
-  {:git/url "https://github.com/metosin/malli"
-   :sha     "8223df795d1c5c3383d305f2f77dbe30d9460e76"}}
+ {metosin/malli {:mvn/version "0.5.1"}}
  :aliases
  {:test
   {:extra-paths ["test"]
